@@ -1,0 +1,181 @@
+@startuml
+title InterviewEngine - Diagrama de clases y helpers
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam monochrome true
+
+class InterviewEngine {
+  - llm: HuggingFaceLLM
+  - prompts: InterviewPrompts
+  - graph: Any
+  + start(student_id: str): InterviewState
+  + advance(state: InterviewState, user_input: str): InterviewState
+  + render_prompt(state: InterviewState): str
+  + render_completion(state: InterviewState): str
+  -- Nodos LangGraph --
+  - _scenario_selector(state: InterviewState): InterviewState
+  - _conversation_agent(state: InterviewState): InterviewState
+  - _response_parser(state: InterviewState): InterviewState
+  - _incremental_scorer(state: InterviewState): InterviewState
+  - _finalizer(state: InterviewState): InterviewState
+  -- Helpers de ruteo y scoring --
+  - _route_after_selection(state: InterviewState): str
+  - _route_after_scoring(state: InterviewState): str
+  - _pick_next_scenario(state: InterviewState): int?
+  - _compute_confidence(state: InterviewState): float
+  - _should_exit_early(state: InterviewState): bool
+  - _infer_style(vector: dict[str, float]): str
+  - _build_summary(state: InterviewState): str
+  - _chunk_for_scenario(scenario_id: int): str
+  - _paired_dimension(dimension: str): str
+  - _scenarios_by_id(): dict[int, ScenarioDefinition]
+}
+
+class HuggingFaceLLM {
+  - settings: Settings
+  - model_name: str?
+  - prompt_builder: HuggingFacePromptBuilder
+  + active_model: str
+  + parse_option_response(user_input: str, scenario: ScenarioDefinition): ParsedResponse
+  - _deterministic_parse(user_input: str, scenario: ScenarioDefinition): ParsedResponse
+  - _from_index(index: int, scenario: ScenarioDefinition, rationale: str): ParsedResponse
+}
+
+class HuggingFacePromptBuilder {
+  + parser_system_prompt(): str
+  + parser_user_prompt(user_input: str, scenario: ScenarioDefinition): str
+}
+
+class InterviewPrompts {
+  + build_scenario_prompt(scenario: ScenarioDefinition, chunk: str, answered_count: int, transition: str?): ScenarioPrompt
+  + clarification_feedback(): str
+  + render_prompt(prompt: ScenarioPrompt, prefix: str?): str
+  + render_completion(profile: KolbProfile, answered_count: int): str
+  - _friendly_prompt(scenario: ScenarioDefinition): str
+  - _chunk_intro(chunk: str, answered_count: int): str
+}
+
+class InterviewState {
+  + student_id: str
+  + pending_scenarios: list[int]
+  + answered_scenarios: list[int]
+  + current_vector: KolbVector
+  + last_user_input: str
+  + is_complete: bool
+  + confidence: float
+  + current_scenario_id: int?
+  + current_chunk: str?
+  + last_prompt: ScenarioPrompt?
+  + profile: KolbProfile?
+  + last_feedback: str?
+  + answers: list[dict[str, Any]]
+  + needs_clarification: bool
+}
+
+class KolbProfile {
+  + student_id: str
+  + current_vector: KolbVector
+  + style: str
+  + confidence: float?
+  + answered_scenarios: list[int]
+  + answers: list[dict[str, Any]]
+  + source: str
+  + summary: str
+}
+
+class KolbVector {
+  + AE: float
+  + RO: float
+  + AC: float
+  + CE: float
+  + as_dict(): dict[str, float]
+}
+
+class ParsedResponse {
+  + selected_score: int?
+  + selected_option_index: int?
+  + rationale: str?
+  + needs_clarification: bool
+}
+
+class ScenarioPrompt {
+  + scenario_id: int
+  + chunk: str
+  + intro: str
+  + prompt: str
+  + options: list[str]
+  + dimension: Dimension
+}
+
+class ScenarioDefinition <<TypedDict>> {
+  + id: int
+  + dimension: Dimension
+  + situation: str
+  + options: list[AssessmentOption]
+}
+
+class StateGraph {
+  + add_node(name: str, handler: callable)
+  + add_edge(source: str, target: str)
+  + add_conditional_edges(source: str, router: callable, mapping: dict)
+  + compile(): Any
+}
+
+class CHUNK_ORDER <<constant>> {
+  A: [1, 4, 9, 12]
+  B: [2, 3, 7, 10]
+  C: [5, 6, 8, 11]
+}
+
+class STYLE_MAP <<constant>> {
+  (AC, AE): Convergente
+  (CE, RO): Divergente
+  (AC, RO): Asimilador
+  (CE, AE): Acomodador
+}
+
+class CHUNK_TRANSITIONS <<constant>> {
+  A: transicion A -> B
+  B: transicion B -> C
+}
+
+InterviewEngine --> HuggingFaceLLM : usa
+InterviewEngine --> InterviewPrompts : usa
+InterviewEngine --> InterviewState : crea y actualiza
+InterviewEngine --> KolbProfile : construye en _finalizer
+InterviewEngine --> ParsedResponse : consume
+InterviewEngine --> ScenarioPrompt : produce
+InterviewEngine --> ScenarioDefinition : consulta
+InterviewEngine --> StateGraph : compone
+HuggingFaceLLM --> HuggingFacePromptBuilder : usa
+HuggingFaceLLM --> ParsedResponse
+HuggingFaceLLM --> ScenarioDefinition
+InterviewState --> KolbVector
+InterviewState --> ScenarioPrompt
+InterviewState --> KolbProfile
+KolbProfile --> KolbVector
+InterviewPrompts --> ScenarioPrompt
+InterviewPrompts --> ScenarioDefinition
+InterviewPrompts --> KolbProfile
+InterviewEngine ..> CHUNK_ORDER
+InterviewEngine ..> STYLE_MAP
+InterviewEngine ..> CHUNK_TRANSITIONS
+
+note right of InterviewEngine
+  El grafo sigue este ciclo principal:
+  scenario_selector -> conversation_agent
+  -> response_parser -> incremental_scorer
+  -> scenario_selector/finalizer
+end note
+
+note bottom of InterviewEngine
+  Helpers clave:
+  - _pick_next_scenario prioriza el bloque activo
+    y el menor nivel de incertidumbre.
+  - _compute_confidence estima consistencia del vector.
+  - _should_exit_early habilita corte anticipado.
+  - _infer_style resuelve el cuadrante Kolb final.
+end note
+
+@enduml

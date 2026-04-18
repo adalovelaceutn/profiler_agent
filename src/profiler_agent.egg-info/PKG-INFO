@@ -1,3 +1,21 @@
+Metadata-Version: 2.4
+Name: profiler-agent
+Version: 0.1.0
+Summary: Agente A2A con LangGraph para recuperar o construir el perfil Kolb de un alumno usando MCP.
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: a2a-sdk==0.3.26
+Requires-Dist: fastapi<1.0,>=0.115
+Requires-Dist: httpx<1.0,>=0.28
+Requires-Dist: langgraph<1.0,>=0.6
+Requires-Dist: mcp==1.27.0
+Requires-Dist: pydantic-settings<3.0,>=2.8
+Requires-Dist: python-dotenv<2.0,>=1.0
+Requires-Dist: uvicorn[standard]<1.0,>=0.34
+Provides-Extra: test
+Requires-Dist: pytest<9.0,>=8.3; extra == "test"
+Requires-Dist: pytest-asyncio<1.0,>=0.26; extra == "test"
+
 # profiler_agent
 
 Agente en Python con LangGraph que expone una interfaz A2A y consulta un servidor MCP para recuperar el perfil Kolb de un alumno. Si el perfil no existe, inicia una entrevista guiada por escenarios, procesa una respuesta por vez y persiste el resultado final nuevamente en MCP.
@@ -16,17 +34,8 @@ Agente en Python con LangGraph que expone una interfaz A2A y consulta un servido
 - `src/profiler_agent/server.py`: arranque FastAPI + A2A.
 - `src/profiler_agent/a2a/executor.py`: contrato `AgentExecutor` del SDK A2A.
 - `src/profiler_agent/interview/engine.py`: grafo LangGraph y lógica de entrevista.
-- `src/profiler_agent/interview/prompts.py`: prompts conversacionales de la entrevista en tono rioplatense.
 - `src/profiler_agent/mcp/client.py`: cliente MCP por stdio, SSE o streamable HTTP.
 - `src/profiler_agent/llm/huggingface.py`: capa LLM configurable con modelos de Hugging Face.
-- `src/profiler_agent/llm/prompts.py`: prompts del parser LLM y contrato de salida JSON.
-
-## Diagramas
-
-En [doc/engine_class_diagram.puml](doc/engine_class_diagram.puml) está el diagrama de clases y helpers de `engine.py`.
-En [doc/engine_sequence_diagram.puml](doc/engine_sequence_diagram.puml) está el flujo de secuencia completo entre A2A, engine, MCP y Hugging Face.
-
-Para abrirlos en VS Code, alcanza con abrir el archivo `.puml`. Si tienes una extensión PlantUML instalada, podrás previsualizarlos directamente.
 
 ## Preparación
 
@@ -90,13 +99,3 @@ El test usa ids únicos por ejecución para evitar colisiones y valida dos cosas
 
 - un alumno inexistente devuelve `None`
 - guardar y recuperar un perfil produce un roundtrip consistente
-
-También hay tests A2A de punta a punta sobre la app local:
-
-- un alumno con perfil existente devuelve la respuesta final desde MCP
-- un alumno inexistente entra en estado `input-required` e inicia la entrevista guiada
-
-Y tests unitarios para fijar el tono y los prompts:
-
-- prompts conversacionales de entrevista
-- prompts del parser LLM para Hugging Face

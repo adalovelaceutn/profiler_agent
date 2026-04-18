@@ -1,0 +1,2 @@
+[console_scripts]
+profiler-agent = profiler_agent.server:main

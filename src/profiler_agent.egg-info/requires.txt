@@ -1,0 +1,12 @@
+a2a-sdk==0.3.26
+fastapi<1.0,>=0.115
+httpx<1.0,>=0.28
+langgraph<1.0,>=0.6
+mcp==1.27.0
+pydantic-settings<3.0,>=2.8
+python-dotenv<2.0,>=1.0
+uvicorn[standard]<1.0,>=0.34
+
+[test]
+pytest<9.0,>=8.3
+pytest-asyncio<1.0,>=0.26
