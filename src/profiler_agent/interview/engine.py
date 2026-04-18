@@ -62,9 +62,11 @@ class InterviewEngine:
         graph.add_edge("finalizer", END)
         self.graph = graph.compile()
 
-    async def start(self, student_id: str) -> InterviewState:
+    async def start(self, student_id: str, student_name: str, student_last_name: str) -> InterviewState:
         state = InterviewState(
             student_id=student_id,
+            student_name=student_name,
+            student_last_name=student_last_name,
             pending_scenarios=list(self._scenarios_by_id().keys()),
         )
         result = await self.graph.ainvoke(state)
@@ -103,6 +105,8 @@ class InterviewEngine:
             scenario=scenario,
             chunk=chunk,
             answered_count=len(state.answered_scenarios),
+            student_name=state.student_name,
+            student_last_name=state.student_last_name,
             transition=transition,
         )
         state.needs_clarification = False

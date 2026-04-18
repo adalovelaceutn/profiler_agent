@@ -1,5 +1,5 @@
 @startuml
-title Flujo de entrevista Kolb - A2A, Engine, MCP y HF
+title Flujo de entrevista Kolb - A2A, saludo inicial, Engine, MCP y HF
 
 skinparam shadowing false
 skinparam monochrome true
@@ -12,65 +12,54 @@ participant "KolbMCPClient" as MCP
 participant "HuggingFaceLLM" as HF
 participant "Servidor MCP" as MCPServer
 
-Alumno -> A2AClient : envia id_alumno
+Alumno -> A2AClient : envia {id, nombre, apellido}
 A2AClient -> Executor : message/send
-Executor -> MCP : get_profile(student_id)
-MCP -> MCPServer : obtener_perfil_kolb(alumno_id)
+Executor -> Executor : parse_student_record(json)
+Executor -> Engine : start(student_id, nombre, apellido)
+Engine -> Engine : _scenario_selector()
+Engine -> Engine : prompts.build_scenario_prompt()
+Engine --> Executor : InterviewState con saludo + prompt inicial
+Executor --> A2AClient : Task input-required + saludo y pregunta 1
+A2AClient --> Alumno : explicacion breve + escenario y opciones
 
-alt perfil existente
-  MCPServer --> MCP : perfil Kolb remoto
-  MCP --> Executor : KolbProfile
-  Executor --> A2AClient : Task completed + resumen
-  A2AClient --> Alumno : perfil existente
-else perfil inexistente
-  MCPServer --> MCP : { not_found: true }
-  MCP --> Executor : None
-  Executor -> Engine : start(student_id)
-  Engine -> Engine : _scenario_selector()
-  Engine -> Engine : prompts.build_scenario_prompt()
-  Engine --> Executor : InterviewState con prompt inicial
-  Executor --> A2AClient : Task input-required + pregunta 1
-  A2AClient --> Alumno : escenario y opciones
+loop una respuesta por turno
+  Alumno -> A2AClient : respuesta libre o 1/2/3
+  A2AClient -> Executor : message/send
+  Executor -> Engine : advance(state, user_input)
+  Engine -> Engine : _response_parser()
+  Engine -> HF : parse_option_response()
+  alt parse deterministico suficiente
+    HF --> Engine : ParsedResponse
+  else requiere clasificacion LLM
+    HF -> HF : prompt_builder.parser_system_prompt()
+    HF -> HF : prompt_builder.parser_user_prompt()
+    HF --> Engine : ParsedResponse
+  end
 
-  loop una respuesta por turno
-    Alumno -> A2AClient : respuesta libre o 1/2/3
-    A2AClient -> Executor : message/send
-    Executor -> Engine : advance(state, user_input)
-    Engine -> Engine : _response_parser()
-    Engine -> HF : parse_option_response()
-    alt parse deterministico suficiente
-      HF --> Engine : ParsedResponse
-    else requiere clasificacion LLM
-      HF -> HF : prompt_builder.parser_system_prompt()
-      HF -> HF : prompt_builder.parser_user_prompt()
-      HF --> Engine : ParsedResponse
-    end
+  alt respuesta ambigua
+    Engine -> Engine : prompts.clarification_feedback()
+    Engine --> Executor : InterviewState needs_clarification
+    Executor --> A2AClient : Task input-required + aclaracion
+    A2AClient --> Alumno : pedido de reformulacion
+  else respuesta valida
+    Engine -> Engine : _incremental_scorer()
+    Engine -> Engine : _compute_confidence()
+    Engine -> Engine : _should_exit_early()
 
-    alt respuesta ambigua
-      Engine -> Engine : prompts.clarification_feedback()
-      Engine --> Executor : InterviewState needs_clarification
-      Executor --> A2AClient : Task input-required + aclaracion
-      A2AClient --> Alumno : pedido de reformulacion
-    else respuesta valida
-      Engine -> Engine : _incremental_scorer()
-      Engine -> Engine : _compute_confidence()
-      Engine -> Engine : _should_exit_early()
-
-      alt entrevista completa o early exit
-        Engine -> Engine : _finalizer()
-        Executor -> MCP : save_profile(profile)
-        MCP -> MCPServer : actualizar_perfil_kolb(...)
-        MCPServer --> MCP : confirmacion
-        MCP --> Executor : ok
-        Executor --> A2AClient : Task completed + cierre
-        A2AClient --> Alumno : perfil generado
-      else quedan escenarios pendientes
-        Engine -> Engine : _scenario_selector()
-        Engine -> Engine : prompts.build_scenario_prompt()
-        Engine --> Executor : InterviewState actualizado
-        Executor --> A2AClient : Task input-required + siguiente pregunta
-        A2AClient --> Alumno : siguiente escenario
-      end
+    alt entrevista completa o early exit
+      Engine -> Engine : _finalizer()
+      Executor -> MCP : save_profile(profile)
+      MCP -> MCPServer : actualizar_perfil_kolb(...)
+      MCPServer --> MCP : confirmacion
+      MCP --> Executor : ok
+      Executor --> A2AClient : Task completed + cierre
+      A2AClient --> Alumno : perfil generado
+    else quedan escenarios pendientes
+      Engine -> Engine : _scenario_selector()
+      Engine -> Engine : prompts.build_scenario_prompt()
+      Engine --> Executor : InterviewState actualizado
+      Executor --> A2AClient : Task input-required + siguiente pregunta
+      A2AClient --> Alumno : siguiente escenario
     end
   end
 end

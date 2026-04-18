@@ -18,12 +18,14 @@ class InterviewPrompts:
         scenario: ScenarioDefinition,
         chunk: str,
         answered_count: int,
+        student_name: str | None = None,
+        student_last_name: str | None = None,
         transition: str | None = None,
     ) -> ScenarioPrompt:
         return ScenarioPrompt(
             scenario_id=scenario["id"],
             chunk=chunk,
-            intro=transition or self._chunk_intro(chunk, answered_count),
+            intro=transition or self._chunk_intro(chunk, answered_count, student_name, student_last_name),
             prompt=self._friendly_prompt(scenario),
             options=[option["text"] for option in scenario["options"]],
             dimension=scenario["dimension"],
@@ -36,7 +38,9 @@ class InterviewPrompts:
         )
 
     def render_prompt(self, prompt: ScenarioPrompt, prefix: str | None = None) -> str:
-        pieces = [piece for piece in [prefix, prompt.intro, prompt.prompt] if piece]
+        pieces: list[str] = [
+            piece for piece in [prefix, prompt.intro, prompt.prompt] if isinstance(piece, str) and piece
+        ]
         options = "\n".join(f"{index + 1}. {option}" for index, option in enumerate(prompt.options))
         return "\n\n".join(pieces + [options])
 
@@ -64,10 +68,19 @@ class InterviewPrompts:
             "Decime con cual opcion te sentis mas identificado."
         )
 
-    def _chunk_intro(self, chunk: str, answered_count: int) -> str:
+    def _chunk_intro(
+        self,
+        chunk: str,
+        answered_count: int,
+        student_name: str | None,
+        student_last_name: str | None,
+    ) -> str:
         if answered_count == 0 and chunk == "A":
+            full_name = " ".join(part for part in [student_name, student_last_name] if part)
             return (
-                "Arranquemos tranqui. La idea es conocerte mejor y encontrar la forma de acompanarte "
-                "de una manera que te sirva de verdad."
+                f"Hola {full_name}, mucho gusto. "
+                "Voy a hacerte unas preguntas cortitas sobre situaciones cotidianas para entender "
+                "como aprendes y como acompanarte mejor. Responde una opcion por vez y al final "
+                "voy a armar tu perfil Kolb."
             )
         return ""

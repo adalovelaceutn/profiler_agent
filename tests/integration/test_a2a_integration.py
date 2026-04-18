@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import uuid
 
 import httpx
@@ -48,28 +49,31 @@ async def _send_user_message(text: str) -> Task:
 
 
 @pytest.mark.asyncio
-async def test_a2a_returns_existing_profile_from_mcp() -> None:
-    task = await _send_user_message("id_alumno: copilot-consistency-smoke-20260418")
-
-    response_text = _extract_task_text(task)
-
-    assert task.status.state == "completed"
-    assert "Encontre el perfil Kolb del alumno copilot-consistency-smoke-20260418" in response_text
-    assert "Estilo: activo." in response_text
-    assert "AE=0.4, RO=0.1, AC=0.3, CE=0.2" in response_text
-
-
-@pytest.mark.asyncio
-async def test_a2a_starts_interview_for_nonexistent_student() -> None:
-    student_id = f"pytest-a2a-missing-{uuid.uuid4().hex}"
-    task = await _send_user_message(f"id_alumno: {student_id}")
+async def test_a2a_starts_interview_from_student_record_payload() -> None:
+    task = await _send_user_message(
+        json.dumps(
+            {
+                "id": "copilot-consistency-smoke-20260418",
+                "nombre": "Ada",
+                "apellido": "Lovelace",
+            }
+        )
+    )
 
     response_text = _extract_task_text(task)
 
     assert task.status.state == "input-required"
-    assert "Arranquemos tranqui" in response_text
-    assert "conocerte mejor" in response_text
+    assert "Hola Ada Lovelace, mucho gusto." in response_text
+    assert "Voy a hacerte unas preguntas cortitas" in response_text
+    assert "perfil Kolb" in response_text
     assert "Te compras un electrodomestico complejo y nuevo que nunca usaste" in response_text
-    assert "1." in response_text
-    assert "2." in response_text
-    assert "3." in response_text
+
+
+@pytest.mark.asyncio
+async def test_a2a_rejects_invalid_student_record_payload() -> None:
+    task = await _send_user_message(json.dumps({"id": f"pytest-a2a-missing-{uuid.uuid4().hex}", "nombre": "Ada"}))
+
+    response_text = _extract_task_text(task)
+
+    assert task.status.state == "input-required"
+    assert "registro de alumno valido en JSON" in response_text

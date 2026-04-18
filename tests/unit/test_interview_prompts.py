@@ -9,11 +9,19 @@ def test_interview_prompt_uses_empatic_rioplatense_tone() -> None:
     prompts = InterviewPrompts()
     scenario = ASSESSMENTS[0]["scenarios"][0]
 
-    prompt = prompts.build_scenario_prompt(scenario=scenario, chunk="A", answered_count=0)
+    prompt = prompts.build_scenario_prompt(
+        scenario=scenario,
+        chunk="A",
+        answered_count=0,
+        student_name="Ada",
+        student_last_name="Lovelace",
+    )
     rendered = prompts.render_prompt(prompt)
 
-    assert "Arranquemos tranqui" in rendered
+    assert "Hola Ada Lovelace, mucho gusto." in rendered
+    assert "Voy a hacerte unas preguntas cortitas" in rendered
     assert "acompanarte" in rendered
+    assert "perfil Kolb" in rendered
     assert "Che, te hago una pregunta cortita" in rendered
     assert "te sentis mas identificado" in rendered
 

@@ -1,15 +1,13 @@
 # profiler_agent
 
-Agente en Python con LangGraph que expone una interfaz A2A y consulta un servidor MCP para recuperar el perfil Kolb de un alumno. Si el perfil no existe, inicia una entrevista guiada por escenarios, procesa una respuesta por vez y persiste el resultado final nuevamente en MCP.
+Agente en Python con LangGraph que expone una interfaz A2A, recibe un registro de alumno y construye su perfil Kolb mediante una entrevista guiada por escenarios. El resultado final se persiste en un servidor MCP.
 
 ## Flujo
 
-1. Llega un mensaje A2A con `id_alumno`.
-2. El agente consulta el servidor MCP con la tool configurada en `.env`.
-3. Si el perfil existe, responde con el resumen y termina.
-4. Si el perfil no existe, dispara un grafo LangGraph con loop de entrevista.
-5. El loop usa selección incremental de escenarios, parser de respuesta, scoring en tiempo real y early exit por confianza.
-6. Al cerrar, guarda el perfil generado en MCP.
+1. Llega un mensaje A2A con un JSON que incluye `id`, `nombre` y `apellido`.
+2. El agente saluda, explica brevemente la dinamica y dispara un grafo LangGraph con loop de entrevista.
+3. El loop usa selección incremental de escenarios, parser de respuesta, scoring en tiempo real y early exit por confianza.
+4. Al cerrar, guarda el perfil generado en MCP.
 
 ## Estructura
 
@@ -69,11 +67,9 @@ Endpoints relevantes:
 
 ## Ejemplo de inicio de entrevista
 
-Envía al endpoint A2A un mensaje de texto con alguno de estos formatos:
+Envia al endpoint A2A un mensaje de texto con este formato JSON:
 
-- `id_alumno: 12345`
-- `id_alumno=12345`
-- `12345`
+- `{"id":"12345","nombre":"Ada","apellido":"Lovelace"}`
 
 Luego el agente responderá una situación por vez. Para responder, el alumno puede mandar `1`, `2`, `3` o texto libre parecido a alguna opción.
 
@@ -93,8 +89,8 @@ El test usa ids únicos por ejecución para evitar colisiones y valida dos cosas
 
 También hay tests A2A de punta a punta sobre la app local:
 
-- un alumno con perfil existente devuelve la respuesta final desde MCP
-- un alumno inexistente entra en estado `input-required` e inicia la entrevista guiada
+- un registro de alumno valido entra en estado `input-required` e inicia la entrevista guiada
+- un payload invalido devuelve una instruccion clara para reenviar el JSON esperado
 
 Y tests unitarios para fijar el tono y los prompts:
 

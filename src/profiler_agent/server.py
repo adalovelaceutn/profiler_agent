@@ -19,7 +19,7 @@ def build_agent_card() -> AgentCard:
     settings = get_settings()
     return AgentCard(
         name="kolb-profiler-agent",
-        description="Recupera o construye el perfil Kolb de un alumno mediante A2A y MCP.",
+        description="Construye el perfil Kolb de un alumno mediante entrevista guiada por A2A y lo persiste en MCP.",
         url=settings.public_base_url,
         version="0.1.0",
         defaultInputModes=["text/plain"],
@@ -27,11 +27,11 @@ def build_agent_card() -> AgentCard:
         capabilities=AgentCapabilities(streaming=False, pushNotifications=False),
         skills=[
             AgentSkill(
-                id="kolb-profile-retrieval-and-interview",
-                name="Kolb Profile Retrieval",
-                description="Busca el perfil Kolb del alumno en MCP y, si falta, lo crea con entrevista guiada incremental.",
+                id="kolb-profile-interview-and-save",
+                name="Kolb Profile Interview",
+                description="Recibe un registro de alumno por A2A, realiza una entrevista guiada incremental y guarda el perfil resultante en MCP.",
                 tags=["kolb", "a2a", "mcp", "assessment", "langgraph"],
-                examples=["id_alumno: 12345"],
+                examples=['{"id":"12345","nombre":"Ada","apellido":"Lovelace"}'],
                 inputModes=["text/plain"],
                 outputModes=["text/plain"],
             )

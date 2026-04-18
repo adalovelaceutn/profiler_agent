@@ -2,10 +2,18 @@ from __future__ import annotations
 
 from typing import Any, Literal, TypedDict
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 Dimension = Literal["AE", "RO", "AC", "CE"]
+
+
+def _empty_int_list() -> list[int]:
+    return []
+
+
+def _empty_answer_list() -> list[dict[str, Any]]:
+    return []
 
 
 class AssessmentOption(TypedDict):
@@ -52,6 +60,22 @@ class ScenarioPrompt(BaseModel):
     dimension: Dimension
 
 
+class StudentRecord(BaseModel):
+    id: str
+    nombre: str
+    apellido: str
+
+    @field_validator("id", "nombre", "apellido", mode="before")
+    @classmethod
+    def _strip_required_text(cls, value: Any) -> str:
+        if not isinstance(value, str):
+            raise ValueError("El valor debe ser texto")
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("El valor no puede estar vacio")
+        return cleaned
+
+
 class KolbProfile(BaseModel):
     student_id: str
     assessment_name: str = "Lovelace Everyday Life Profiling"
@@ -67,8 +91,10 @@ class KolbProfile(BaseModel):
 
 class InterviewState(BaseModel):
     student_id: str
+    student_name: str
+    student_last_name: str
     pending_scenarios: list[int]
-    answered_scenarios: list[int] = Field(default_factory=list)
+    answered_scenarios: list[int] = Field(default_factory=_empty_int_list)
     current_vector: KolbVector = Field(default_factory=KolbVector)
     last_user_input: str = ""
     is_complete: bool = False
@@ -78,5 +104,5 @@ class InterviewState(BaseModel):
     last_prompt: ScenarioPrompt | None = None
     profile: KolbProfile | None = None
     last_feedback: str | None = None
-    answers: list[dict[str, Any]] = Field(default_factory=list)
+    answers: list[dict[str, Any]] = Field(default_factory=_empty_answer_list)
     needs_clarification: bool = False

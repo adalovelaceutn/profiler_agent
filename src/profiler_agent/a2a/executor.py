@@ -2,15 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pydantic import ValidationError
+
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.tasks.task_updater import TaskUpdater
-from a2a.types import Part, TextPart
+from a2a.types import TextPart
 
 from profiler_agent.interview.engine import InterviewEngine
 from profiler_agent.interview.repository import InterviewRepository
-from profiler_agent.mcp.client import KolbMCPClient, KolbProfileNotFoundError
-from profiler_agent.models import InterviewState
+from profiler_agent.mcp.client import KolbMCPClient
+from profiler_agent.models import InterviewState, StudentRecord
 
 
 @dataclass(slots=True)
@@ -31,26 +33,23 @@ class KolbAgentExecutor(AgentExecutor):
 
         existing_state = await self.interview_repository.get(context.task_id)
         if existing_state is None:
-            student_id = self._extract_student_id(user_input)
-            if not student_id:
+            student = self._parse_student_record(user_input)
+            if student is None:
                 await updater.requires_input(
-                    updater.new_agent_message([TextPart(text="Necesito que me mandes un id_alumno valido para empezar.")])
+                    updater.new_agent_message(
+                        [
+                            TextPart(
+                                text=(
+                                    "Necesito que me mandes un registro de alumno valido en JSON "
+                                    "con id, nombre y apellido para empezar."
+                                )
+                            )
+                        ]
+                    )
                 )
                 return
 
-            try:
-                profile = await self.mcp_client.get_profile(student_id)
-            except KolbProfileNotFoundError:
-                profile = None
-
-            if profile is not None:
-                message = updater.new_agent_message(
-                    [TextPart(text=self._render_existing_profile(profile.model_dump()))]
-                )
-                await updater.complete(message)
-                return
-
-            state = await self.engine.start(student_id)
+            state = await self.engine.start(student.id, student.nombre, student.apellido)
             await self.interview_repository.save(context.task_id, state)
             prompt_text = self.engine.render_prompt(state)
             await updater.requires_input(updater.new_agent_message([TextPart(text=prompt_text)]))
@@ -87,26 +86,11 @@ class KolbAgentExecutor(AgentExecutor):
             updater.new_agent_message([TextPart(text="La entrevista fue cancelada.")])
         )
 
-    def _extract_student_id(self, user_input: str) -> str | None:
+    def _parse_student_record(self, user_input: str) -> StudentRecord | None:
         cleaned = user_input.strip()
         if not cleaned:
             return None
-        prefixes = ["id_alumno:", "id_alumno=", "student_id:", "student_id="]
-        lowered = cleaned.lower()
-        for prefix in prefixes:
-            if lowered.startswith(prefix):
-                return cleaned[len(prefix):].strip()
-        return cleaned.split()[0] if " " not in cleaned else None
-
-    def _render_existing_profile(self, profile: dict) -> str:
-        vector = profile["current_vector"]
-        lines = [
-            f"Encontre el perfil Kolb del alumno {profile['student_id']} en el servidor MCP.\n\n"
-            f"Estilo: {profile['style']}.\n"
-            f"Vector: AE={vector['AE']}, RO={vector['RO']}, AC={vector['AC']}, CE={vector['CE']}."
-        ]
-        if profile.get('summary'):
-            lines.append(f"\nResumen: {profile['summary']}")
-        if profile.get('confidence') is not None:
-            lines.append(f"\nConfianza: {profile['confidence']}.")
-        return ''.join(lines)
+        try:
+            return StudentRecord.model_validate_json(cleaned)
+        except ValidationError:
+            return None
