@@ -99,6 +99,11 @@ class InterviewEngine:
             if previous_chunk != chunk:
                 transition = CHUNK_TRANSITIONS.get(previous_chunk)
 
+        generated_prompt = await self.llm.generate_scenario_prompt(
+            scenario,
+            recent_prompts=state.prompt_history[-3:],
+        )
+
         state.current_scenario_id = next_scenario_id
         state.current_chunk = chunk
         state.last_prompt = self.prompts.build_scenario_prompt(
@@ -108,7 +113,9 @@ class InterviewEngine:
             student_name=state.student_name,
             student_last_name=state.student_last_name,
             transition=transition,
+            prompt_text=generated_prompt,
         )
+        state.prompt_history.append(state.last_prompt.prompt)
         state.needs_clarification = False
         return state
 

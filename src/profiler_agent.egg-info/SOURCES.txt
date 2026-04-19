@@ -13,6 +13,8 @@ src/profiler_agent.egg-info/requires.txt
 src/profiler_agent.egg-info/top_level.txt
 src/profiler_agent/a2a/executor.py
 src/profiler_agent/interview/engine.py
+src/profiler_agent/interview/prompts.py
 src/profiler_agent/interview/repository.py
 src/profiler_agent/llm/huggingface.py
+src/profiler_agent/llm/prompts.py
 src/profiler_agent/mcp/client.py

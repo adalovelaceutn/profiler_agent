@@ -16,6 +16,10 @@ def _empty_answer_list() -> list[dict[str, Any]]:
     return []
 
 
+def _empty_text_list() -> list[str]:
+    return []
+
+
 class AssessmentOption(TypedDict):
     text: str
     score: int
@@ -102,6 +106,7 @@ class InterviewState(BaseModel):
     current_scenario_id: int | None = None
     current_chunk: str | None = None
     last_prompt: ScenarioPrompt | None = None
+    prompt_history: list[str] = Field(default_factory=_empty_text_list)
     profile: KolbProfile | None = None
     last_feedback: str | None = None
     answers: list[dict[str, Any]] = Field(default_factory=_empty_answer_list)

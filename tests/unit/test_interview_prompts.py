@@ -22,8 +22,22 @@ def test_interview_prompt_uses_empatic_rioplatense_tone() -> None:
     assert "Voy a hacerte unas preguntas cortitas" in rendered
     assert "acompanarte" in rendered
     assert "perfil Kolb" in rendered
-    assert "Che, te hago una pregunta cortita" in rendered
+    assert "Te compras un electrodomestico complejo y nuevo que nunca usaste." in rendered
+    assert "situacion bien cotidiana" in rendered
     assert "te sentis mas identificado" in rendered
+
+
+def test_interview_prompt_varies_the_intro_between_scenarios() -> None:
+    prompts = InterviewPrompts()
+    first_scenario = ASSESSMENTS[0]["scenarios"][0]
+    second_scenario = ASSESSMENTS[0]["scenarios"][1]
+
+    first_prompt = prompts.build_scenario_prompt(first_scenario, chunk="A", answered_count=0)
+    second_prompt = prompts.build_scenario_prompt(second_scenario, chunk="A", answered_count=1)
+
+    assert first_prompt.prompt != second_prompt.prompt
+    assert first_scenario["situation"] in first_prompt.prompt
+    assert second_scenario["situation"] in second_prompt.prompt
 
 
 def test_interview_completion_omits_confidence_when_missing() -> None:

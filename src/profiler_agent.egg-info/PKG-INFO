@@ -18,24 +18,31 @@ Requires-Dist: pytest-asyncio<1.0,>=0.26; extra == "test"
 
 # profiler_agent
 
-Agente en Python con LangGraph que expone una interfaz A2A y consulta un servidor MCP para recuperar el perfil Kolb de un alumno. Si el perfil no existe, inicia una entrevista guiada por escenarios, procesa una respuesta por vez y persiste el resultado final nuevamente en MCP.
+Agente en Python con LangGraph que expone una interfaz A2A, recibe un registro de alumno y construye su perfil Kolb mediante una entrevista guiada por escenarios. El resultado final se persiste en un servidor MCP.
 
 ## Flujo
 
-1. Llega un mensaje A2A con `id_alumno`.
-2. El agente consulta el servidor MCP con la tool configurada en `.env`.
-3. Si el perfil existe, responde con el resumen y termina.
-4. Si el perfil no existe, dispara un grafo LangGraph con loop de entrevista.
-5. El loop usa selección incremental de escenarios, parser de respuesta, scoring en tiempo real y early exit por confianza.
-6. Al cerrar, guarda el perfil generado en MCP.
+1. Llega un mensaje A2A con un JSON que incluye `id`, `nombre` y `apellido`.
+2. El agente saluda, explica brevemente la dinamica y dispara un grafo LangGraph con loop de entrevista.
+3. El loop usa selección incremental de escenarios, parser de respuesta, scoring en tiempo real y early exit por confianza.
+4. Al cerrar, guarda el perfil generado en MCP.
 
 ## Estructura
 
 - `src/profiler_agent/server.py`: arranque FastAPI + A2A.
 - `src/profiler_agent/a2a/executor.py`: contrato `AgentExecutor` del SDK A2A.
 - `src/profiler_agent/interview/engine.py`: grafo LangGraph y lógica de entrevista.
+- `src/profiler_agent/interview/prompts.py`: prompts conversacionales de la entrevista en tono rioplatense.
 - `src/profiler_agent/mcp/client.py`: cliente MCP por stdio, SSE o streamable HTTP.
 - `src/profiler_agent/llm/huggingface.py`: capa LLM configurable con modelos de Hugging Face.
+- `src/profiler_agent/llm/prompts.py`: prompts del parser LLM y contrato de salida JSON.
+
+## Diagramas
+
+En [doc/engine_class_diagram.puml](doc/engine_class_diagram.puml) está el diagrama de clases y helpers de `engine.py`.
+En [doc/engine_sequence_diagram.puml](doc/engine_sequence_diagram.puml) está el flujo de secuencia completo entre A2A, engine, MCP y Hugging Face.
+
+Para abrirlos en VS Code, alcanza con abrir el archivo `.puml`. Si tienes una extensión PlantUML instalada, podrás previsualizarlos directamente.
 
 ## Preparación
 
@@ -69,6 +76,26 @@ Configuracion remota ya preparada para este workspace:
 uvicorn profiler_agent.server:app --host 0.0.0.0 --port 8000
 ```
 
+## Despliegue
+
+El repositorio ya ignora `.env` y `.venv` en `.gitignore`, así que no hace falta tocar secretos ni artefactos locales para publicarlo.
+
+Se agregó [requirements.txt](requirements.txt) para plataformas que no instalan desde `pyproject.toml`.
+
+Como el proyecto usa layout `src/`, ese archivo también instala el paquete local para que `profiler_agent` quede importable en producción.
+
+Comandos sugeridos:
+
+```bash
+pip install -r requirements.txt
+```
+
+```bash
+uvicorn profiler_agent.server:app --host 0.0.0.0 --port ${PORT:-8000}
+```
+
+La app ahora acepta tanto `APP_PORT` como `PORT`, que es la variable estándar en varios proveedores de despliegue.
+
 Endpoints relevantes:
 
 - `GET /.well-known/agent-card.json`
@@ -78,11 +105,9 @@ Endpoints relevantes:
 
 ## Ejemplo de inicio de entrevista
 
-Envía al endpoint A2A un mensaje de texto con alguno de estos formatos:
+Envia al endpoint A2A un mensaje de texto con este formato JSON:
 
-- `id_alumno: 12345`
-- `id_alumno=12345`
-- `12345`
+- `{"id":"12345","nombre":"Ada","apellido":"Lovelace"}`
 
 Luego el agente responderá una situación por vez. Para responder, el alumno puede mandar `1`, `2`, `3` o texto libre parecido a alguna opción.
 
@@ -99,3 +124,13 @@ El test usa ids únicos por ejecución para evitar colisiones y valida dos cosas
 
 - un alumno inexistente devuelve `None`
 - guardar y recuperar un perfil produce un roundtrip consistente
+
+También hay tests A2A de punta a punta sobre la app local:
+
+- un registro de alumno valido entra en estado `input-required` e inicia la entrevista guiada
+- un payload invalido devuelve una instruccion clara para reenviar el JSON esperado
+
+Y tests unitarios para fijar el tono y los prompts:
+
+- prompts conversacionales de entrevista
+- prompts del parser LLM para Hugging Face

@@ -21,6 +21,52 @@ class HuggingFaceLLM:
     def active_model(self) -> str:
         return self.model_name or self.settings.hf_model
 
+    async def generate_scenario_prompt(
+        self,
+        scenario: ScenarioDefinition,
+        recent_prompts: list[str] | None = None,
+    ) -> str | None:
+        if not self.settings.hf_api_key:
+            return None
+
+        payload = {
+            "model": self.active_model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": self.prompt_builder.scenario_system_prompt(),
+                },
+                {
+                    "role": "user",
+                    "content": self.prompt_builder.scenario_user_prompt(scenario, recent_prompts=recent_prompts),
+                },
+            ],
+            "temperature": max(self.settings.hf_temperature, 0.4),
+            "max_tokens": min(self.settings.hf_max_tokens, 120),
+            "response_format": {"type": "json_object"},
+        }
+        headers = {"Authorization": f"Bearer {self.settings.hf_api_key}"}
+
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                response = await client.post(
+                    self.settings.hf_api_url,
+                    headers=headers,
+                    json=payload,
+                )
+                response.raise_for_status()
+                content = response.json()["choices"][0]["message"]["content"]
+                data = json.loads(content)
+                prompt = data.get("prompt")
+                if isinstance(prompt, str):
+                    cleaned = prompt.strip().strip('"')
+                    if cleaned:
+                        return cleaned
+        except Exception:
+            return None
+
+        return None
+
     async def parse_option_response(
         self,
         user_input: str,

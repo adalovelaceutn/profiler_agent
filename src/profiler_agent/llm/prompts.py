@@ -7,6 +7,35 @@ from profiler_agent.models import ScenarioDefinition
 
 @dataclass(slots=True)
 class HuggingFacePromptBuilder:
+    def scenario_system_prompt(self) -> str:
+        return (
+            "Sos un entrevistador calido, empatico y muy coloquial de Argentina. "
+            "Reescribis situaciones cotidianas como preguntas breves, naturales y cercanas, sin sonar robotico. "
+            "Mantenes voseo rioplatense, no repetis muletillas, no agregas opciones nuevas y no cambias el sentido del escenario. "
+            "Devolves solo JSON valido."
+        )
+
+    def scenario_user_prompt(self, scenario: ScenarioDefinition, recent_prompts: list[str] | None = None) -> str:
+        options = "\n".join(
+            f"{index + 1}. {option['text']}" for index, option in enumerate(scenario["options"])
+        )
+        recent_prompt_block = ""
+        if recent_prompts:
+            formatted_history = "\n".join(f"- {prompt}" for prompt in recent_prompts)
+            recent_prompt_block = (
+                "Estas fueron algunas formulaciones recientes. No repitas el arranque, el ritmo ni las muletillas:\n"
+                f"{formatted_history}\n\n"
+            )
+        return (
+            "Quiero que reformules esta situacion como una pregunta para una entrevista breve de perfil de aprendizaje. "
+            "Tiene que sonar humana, cercana y variar la entrada respecto de otras preguntas. "
+            "Debe mencionar la situacion, invitar a elegir una opcion y quedar en un maximo de dos oraciones.\n\n"
+            f"{recent_prompt_block}"
+            f"Situacion original: {scenario['situation']}\n"
+            f"Opciones disponibles:\n{options}\n\n"
+            'Devolve JSON exacto con este formato: {"prompt": "..."}'
+        )
+
     def parser_system_prompt(self) -> str:
         return (
             "Sos un clasificador estricto y cuidadoso. "

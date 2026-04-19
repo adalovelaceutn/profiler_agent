@@ -10,6 +10,20 @@ CHUNK_TRANSITIONS: dict[str, str] = {
     "B": "Me sirve mucho lo que me venis contando. Con estas ultimas te termino de perfilar mejor.",
 }
 
+FALLBACK_PROMPT_OPENERS: tuple[str, ...] = (
+    "Vamos con una situacion bien cotidiana.",
+    "Te propongo una de esas que pasan seguido.",
+    "A ver como te moves en esta.",
+    "Pensemos un caso simple y de todos los dias.",
+)
+
+FALLBACK_PROMPT_CLOSERS: tuple[str, ...] = (
+    "Decime con cual opcion te sentis mas identificado.",
+    "Contame que opcion va mas con vos.",
+    "Elegi la opcion que mas te represente.",
+    "Marcame la opcion que mas se parece a vos.",
+)
+
 
 @dataclass(slots=True)
 class InterviewPrompts:
@@ -21,12 +35,13 @@ class InterviewPrompts:
         student_name: str | None = None,
         student_last_name: str | None = None,
         transition: str | None = None,
+        prompt_text: str | None = None,
     ) -> ScenarioPrompt:
         return ScenarioPrompt(
             scenario_id=scenario["id"],
             chunk=chunk,
             intro=transition or self._chunk_intro(chunk, answered_count, student_name, student_last_name),
-            prompt=self._friendly_prompt(scenario),
+            prompt=prompt_text or self._fallback_prompt(scenario),
             options=[option["text"] for option in scenario["options"]],
             dimension=scenario["dimension"],
         )
@@ -62,11 +77,11 @@ class InterviewPrompts:
             f"{confidence_line}"
         )
 
-    def _friendly_prompt(self, scenario: ScenarioDefinition) -> str:
-        return (
-            f"Che, te hago una pregunta cortita para conocerte un poco mejor. {scenario['situation']} "
-            "Decime con cual opcion te sentis mas identificado."
-        )
+    def _fallback_prompt(self, scenario: ScenarioDefinition) -> str:
+        opener = FALLBACK_PROMPT_OPENERS[(scenario["id"] - 1) % len(FALLBACK_PROMPT_OPENERS)]
+        closer = FALLBACK_PROMPT_CLOSERS[(scenario["id"] - 1) % len(FALLBACK_PROMPT_CLOSERS)]
+        situation = scenario["situation"].strip()
+        return f"{opener} {situation} {closer}"
 
     def _chunk_intro(
         self,
