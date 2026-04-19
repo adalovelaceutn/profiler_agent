@@ -64,6 +64,8 @@ El repositorio ya ignora `.env` y `.venv` en `.gitignore`, así que no hace falt
 
 Se agregó [requirements.txt](requirements.txt) para plataformas que no instalan desde `pyproject.toml`.
 
+Como el proyecto usa layout `src/`, ese archivo también instala el paquete local para que `profiler_agent` quede importable en producción.
+
 Comandos sugeridos:
 
 ```bash
