@@ -4,7 +4,7 @@ import json
 from functools import lru_cache
 from typing import Any
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,7 +16,10 @@ class Settings(BaseSettings):
     )
 
     app_host: str = Field(default="0.0.0.0", alias="APP_HOST")
-    app_port: int = Field(default=8000, alias="APP_PORT")
+    app_port: int = Field(
+        default=8000,
+        validation_alias=AliasChoices("PORT", "APP_PORT"),
+    )
     public_base_url: str = Field(
         default="http://localhost:8000",
         alias="PUBLIC_BASE_URL",

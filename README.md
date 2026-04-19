@@ -58,6 +58,24 @@ Configuracion remota ya preparada para este workspace:
 uvicorn profiler_agent.server:app --host 0.0.0.0 --port 8000
 ```
 
+## Despliegue
+
+El repositorio ya ignora `.env` y `.venv` en `.gitignore`, así que no hace falta tocar secretos ni artefactos locales para publicarlo.
+
+Se agregó [requirements.txt](requirements.txt) para plataformas que no instalan desde `pyproject.toml`.
+
+Comandos sugeridos:
+
+```bash
+pip install -r requirements.txt
+```
+
+```bash
+uvicorn profiler_agent.server:app --host 0.0.0.0 --port ${PORT:-8000}
+```
+
+La app ahora acepta tanto `APP_PORT` como `PORT`, que es la variable estándar en varios proveedores de despliegue.
+
 Endpoints relevantes:
 
 - `GET /.well-known/agent-card.json`
