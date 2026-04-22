@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 from pydantic import ValidationError
@@ -64,9 +65,17 @@ class KolbAgentExecutor(AgentExecutor):
 
         if state.is_complete and state.profile is not None:
             await self.mcp_client.save_profile(state.profile)
-            final_message = updater.new_agent_message(
-                [TextPart(text=self.engine.render_completion(state))]
+            completion_payload = json.dumps(
+                {
+                    "status": "completed",
+                    "student_id": state.profile.student_id,
+                    "kolb_style": state.profile.style,
+                    "confidence": state.profile.confidence,
+                    "answered_scenarios": len(state.answered_scenarios),
+                },
+                ensure_ascii=False,
             )
+            final_message = updater.new_agent_message([TextPart(text=completion_payload)])
             await updater.complete(final_message)
             await self.interview_repository.delete(context.task_id)
             return

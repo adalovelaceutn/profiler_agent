@@ -47,7 +47,7 @@ class Settings(BaseSettings):
         alias="MCP_GET_PROFILE_TOOL",
     )
     mcp_save_profile_tool: str = Field(
-        default="save_kolb_profile",
+        default="actualizar_perfil_kolb",
         alias="MCP_SAVE_PROFILE_TOOL",
     )
 

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+
+import pytest
 from a2a.server.agent_execution import RequestContext
 from a2a.server.events import EventQueue
 from a2a.types import Message, MessageSendParams, Role, TextPart
@@ -178,4 +181,9 @@ async def test_execute_saves_profile_when_interview_finishes() -> None:
     assert mcp_client.saved_profiles == [profile]
     assert repository.deleted_task_id == context.task_id
     assert getattr(events[-1], "status").state == "completed"
-    assert _extract_message_text(events[-1]) == "COMPLETED"
+    completion_payload = json.loads(_extract_message_text(events[-1]))
+    assert completion_payload["status"] == "completed"
+    assert completion_payload["student_id"] == "123"
+    assert completion_payload["kolb_style"] == "Convergente"
+    assert completion_payload["confidence"] == pytest.approx(0.91)
+    assert completion_payload["answered_scenarios"] == 0
