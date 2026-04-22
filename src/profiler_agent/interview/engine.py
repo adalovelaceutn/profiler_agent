@@ -62,7 +62,7 @@ class InterviewEngine:
         graph.add_edge("finalizer", END)
         self.graph = graph.compile()
 
-    async def start(self, student_id: str, student_name: str, student_last_name: str) -> InterviewState:
+    async def start(self, student_id: int, student_name: str, student_last_name: str) -> InterviewState:
         state = InterviewState(
             student_id=student_id,
             student_name=student_name,

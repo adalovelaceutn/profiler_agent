@@ -50,7 +50,7 @@ class KolbAgentExecutor(AgentExecutor):
                 )
                 return
 
-            state = await self.engine.start(student.id, student.nombre, student.apellido)
+            state = await self.engine.start(int(student.id), student.nombre, student.apellido)
             await self.interview_repository.save(context.task_id, state)
             prompt_text = self.engine.render_prompt(state)
             await updater.requires_input(updater.new_agent_message([TextPart(text=prompt_text)]))

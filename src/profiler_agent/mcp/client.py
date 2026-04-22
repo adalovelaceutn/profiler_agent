@@ -61,11 +61,11 @@ class KolbMCPClient:
 
         raise ValueError(f"MCP_TRANSPORT no soportado: {self.settings.mcp_transport}")
 
-    async def get_profile(self, student_id: str) -> KolbProfile | None:
+    async def get_profile(self, student_id: int) -> KolbProfile | None:
         async with self.session() as session:
             result = await session.call_tool(
                 self.settings.mcp_get_profile_tool,
-                arguments={"alumno_id": student_id},
+                arguments={"alumno_id": str(student_id)},
             )
         if result.isError:
             raise KolbProfileNotFoundError(self._extract_error(result.content))
@@ -86,7 +86,7 @@ class KolbMCPClient:
             raise RuntimeError(self._extract_error(result.content))
         return result.structuredContent or self._extract_json(result.content) or {"ok": True}
 
-    def _to_local_profile(self, student_id: str, data: dict[str, Any]) -> KolbProfile:
+    def _to_local_profile(self, student_id: int, data: dict[str, Any]) -> KolbProfile:
         raw_profile = data.get("kolb_profile", {})
         vector = KolbVector(
             AE=float(raw_profile.get("activo", 0.0)),
@@ -112,7 +112,7 @@ class KolbMCPClient:
         vector = profile.current_vector.as_dict()
         total = sum(vector.values()) or 1.0
         return {
-            "alumno_id": profile.student_id,
+            "alumno_id": str(profile.student_id),
             "activo": round(vector["AE"] / total, 4),
             "reflexivo": round(vector["RO"] / total, 4),
             "teorico": round(vector["AC"] / total, 4),

@@ -81,7 +81,7 @@ class StudentRecord(BaseModel):
 
 
 class KolbProfile(BaseModel):
-    student_id: str
+    student_id: int
     assessment_name: str = "Lovelace Everyday Life Profiling"
     model_name: str = "Kolb Cycle"
     current_vector: KolbVector
@@ -94,7 +94,7 @@ class KolbProfile(BaseModel):
 
 
 class InterviewState(BaseModel):
-    student_id: str
+    student_id: int
     student_name: str
     student_last_name: str
     pending_scenarios: list[int]
