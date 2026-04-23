@@ -31,7 +31,7 @@ class HuggingFacePromptBuilder:
             "Usa palabras como imaginate que, pensa que, suponete que, etc. para sonar mas natural y cercana. "
             "Tiene que sonar humana, cercana y variar la entrada respecto de otras preguntas. "
             "Debe mencionar la situacion, invitar a elegir una opcion y quedar en un maximo de dos oraciones.\n\n"
-            "No incluyas las opciones en el planteo de la pregunta, formula las opciones como parte de la respuesta que va a elegir el alumno. "
+            "NO INCLUYAS LAS OPCIONES en el planteo de la pregunta, formula las opciones UNA SÓLA VEZ como parte de la respuesta que va a elegir el alumno. "
             f"{recent_prompt_block}"
             f"Situacion original: {scenario['situation']}\n"
             f"Opciones disponibles:\n{options}\n\n"
