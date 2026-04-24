@@ -65,8 +65,15 @@ class KolbMCPClient:
         async with self.session() as session:
             result = await session.call_tool(
                 self.settings.mcp_get_profile_tool,
-                arguments={"alumno_id": str(student_id)},
+                arguments={"student_id": student_id},
             )
+            if result.isError:
+                first_error = self._extract_error(result.content)
+                if self._is_legacy_get_profile_error(first_error):
+                    result = await session.call_tool(
+                        self.settings.mcp_get_profile_tool,
+                        arguments={"alumno_id": str(student_id)},
+                    )
         if result.isError:
             raise KolbProfileNotFoundError(self._extract_error(result.content))
         data = result.structuredContent or self._extract_json(result.content)
@@ -87,38 +94,98 @@ class KolbMCPClient:
         return result.structuredContent or self._extract_json(result.content) or {"ok": True}
 
     def _to_local_profile(self, student_id: int, data: dict[str, Any]) -> KolbProfile:
-        raw_profile = data.get("kolb_profile", {})
+        raw_profile = data.get("kolb_profile")
+
+        # Soporta payload nuevo: sobre + kolb_profile completo serializado.
+        if isinstance(raw_profile, dict) and isinstance(raw_profile.get("current_vector"), dict):
+            profile_data = dict(raw_profile)
+            profile_data.setdefault("student_id", student_id)
+            return KolbProfile.model_validate(profile_data)
+
+        # Soporta formato plano alineado con el esquema SQL (student_profile).
+        if "ae_score" in data or "style" in data:
+            vector = KolbVector(
+                AE=self._to_float(data.get("ae_score")),
+                RO=self._to_float(data.get("ro_score")),
+                AC=self._to_float(data.get("ac_score")),
+                CE=self._to_float(data.get("ce_score")),
+            )
+            raw_answers = data.get("answers") or []
+            answers = [
+                {
+                    "scenario_id": a.get("scenario_id"),
+                    "dimension": a.get("dimension"),
+                    "answer": a.get("answer_text", a.get("answer", "")),
+                }
+                for a in raw_answers
+                if isinstance(a, dict)
+            ]
+            return KolbProfile(
+                student_id=data.get("student_id", student_id),
+                assessment_name=str(data.get("assessment_name") or "Lovelace Everyday Life Profiling"),
+                model_name=str(data.get("model_name") or "Kolb Cycle"),
+                current_vector=vector,
+                style=str(data.get("style") or ""),
+                confidence=self._to_float(data["confidence"]) if data.get("confidence") is not None else None,
+                answered_scenarios=data.get("answered_scenarios") or [],
+                answers=answers,
+                source=str(data.get("source") or "mcp_remote_profile"),
+                summary=str(data.get("summary") or ""),
+            )
+
+        # Compatibilidad con formato legacy del MCP remoto.
+        legacy_profile = raw_profile if isinstance(raw_profile, dict) else {}
         vector = KolbVector(
-            AE=float(raw_profile.get("activo", 0.0)),
-            RO=float(raw_profile.get("reflexivo", 0.0)),
-            AC=float(raw_profile.get("teorico", 0.0)),
-            CE=float(raw_profile.get("pragmatico", 0.0)),
+            AE=self._to_float(legacy_profile.get("activo")),
+            RO=self._to_float(legacy_profile.get("reflexivo")),
+            AC=self._to_float(legacy_profile.get("teorico")),
+            CE=self._to_float(legacy_profile.get("pragmatico")),
         )
-        style = str(data.get("preferencia_principal") or "")
-        evidence = data.get("evidencia") or []
-        summary = self._build_remote_summary(evidence)
+        style = str(data.get("kolb_style") or data.get("preferencia_principal") or legacy_profile.get("style") or "")
+        confidence = data.get("confidence")
+        answered_scenarios = legacy_profile.get("answered_scenarios")
+        answers = legacy_profile.get("answers")
+        summary = str(legacy_profile.get("summary") or "")
+        if not summary:
+            evidence = data.get("evidencia") or []
+            summary = self._build_remote_summary(evidence)
+
         return KolbProfile(
             student_id=student_id,
             current_vector=vector,
             style=style,
-            confidence=None,
-            answered_scenarios=[],
-            answers=[],
+            confidence=self._to_float(confidence) if confidence is not None else None,
+            answered_scenarios=answered_scenarios if isinstance(answered_scenarios, list) else [],
+            answers=answers if isinstance(answers, list) else [],
             source="mcp_remote_profile",
             summary=summary,
         )
 
     def _to_remote_payload(self, profile: KolbProfile) -> dict[str, Any]:
         vector = profile.current_vector.as_dict()
-        total = sum(vector.values()) or 1.0
         return {
-            "alumno_id": str(profile.student_id),
-            "activo": round(vector["AE"] / total, 4),
-            "reflexivo": round(vector["RO"] / total, 4),
-            "teorico": round(vector["AC"] / total, 4),
-            "pragmatico": round(vector["CE"] / total, 4),
-            "evidencia_texto": profile.summary,
-            "origen": "entrevista_a2a",
+            "student_id": profile.student_id,
+            "assessment_name": profile.assessment_name,
+            "model_name": profile.model_name,
+            "status": "completed",
+            "style": profile.style,
+            "confidence": profile.confidence,
+            "ae_score": round(vector["AE"], 4),
+            "ro_score": round(vector["RO"], 4),
+            "ac_score": round(vector["AC"], 4),
+            "ce_score": round(vector["CE"], 4),
+            "source": profile.source,
+            "summary": profile.summary,
+            "answers": [
+                {
+                    "scenario_id": a.get("scenario_id"),
+                    "dimension": a.get("dimension"),
+                    "answer_text": a.get("answer", ""),
+                }
+                for a in profile.answers
+                if isinstance(a, dict)
+            ],
+            "answered_scenarios": profile.answered_scenarios,
         }
 
     def _build_remote_summary(self, evidence: list[Any]) -> str:
@@ -152,3 +219,13 @@ class KolbMCPClient:
             if isinstance(parsed, dict):
                 return parsed
         return None
+
+    def _is_legacy_get_profile_error(self, error_message: str) -> bool:
+        lowered = error_message.lower()
+        return "alumno_id" in lowered and "field required" in lowered
+
+    def _to_float(self, value: Any) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
