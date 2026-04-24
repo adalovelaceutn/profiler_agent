@@ -28,10 +28,11 @@ class HuggingFacePromptBuilder:
             )
         return (
             "Quiero que reformules esta situacion como una pregunta para una entrevista breve de perfil de aprendizaje. "
-            "Usa palabras como imaginate que, pensa que, suponete que, etc. para sonar mas natural y cercana. "
+            "Usa palabras como IMAGINATE que, SUPONENTE que, SI TE PASARA que, etc. para sonar mas natural y cercana. "
+            "NO ABUSES DE UNA MISMA ENTRADA, VARIA EL ARRANQUE, EL RITMO Y LAS MULETILLAS PARA QUE NO SUENE A PREGUNTA DE ROBOT. "
             "Tiene que sonar humana, cercana y variar la entrada respecto de otras preguntas. "
             "Debe mencionar la situacion, invitar a elegir una opcion y quedar en un maximo de dos oraciones.\n\n"
-            "NO INCLUYAS LAS OPCIONES en el planteo de la pregunta, formula las opciones UNA SÓLA VEZ como parte de la respuesta que va a elegir el alumno. "
+            "NO INCLUYAS LAS OPCIONES DISPONIBLES en el planteo de la pregunta, formula las opciones UNA SÓLA VEZ como parte de la respuesta que va a elegir el alumno. "
             f"{recent_prompt_block}"
             f"Situacion original: {scenario['situation']}\n"
             f"Opciones disponibles:\n{options}\n\n"

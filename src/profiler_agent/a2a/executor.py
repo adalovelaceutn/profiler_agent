@@ -76,6 +76,7 @@ class KolbAgentExecutor(AgentExecutor):
                     "kolb_style": state.profile.style,
                     "confidence": state.profile.confidence,
                     "answered_scenarios": len(state.answered_scenarios),
+                    "kolb_profile": state.profile.model_dump(mode="json"),
                 },
                 ensure_ascii=False,
             )
