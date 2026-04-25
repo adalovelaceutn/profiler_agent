@@ -5,7 +5,7 @@ from profiler_agent.mcp.client import KolbMCPClient
 from profiler_agent.models import KolbProfile, KolbVector
 
 
-def test_to_remote_payload_maps_to_sql_schema() -> None:
+def test_to_remote_payload_maps_to_exact_mcp_schema() -> None:
     client = KolbMCPClient(settings=Settings())
     profile = KolbProfile(
         student_id=123,
@@ -20,25 +20,20 @@ def test_to_remote_payload_maps_to_sql_schema() -> None:
 
     payload = client._to_remote_payload(profile)
 
-    # Campos de student_profile
     assert payload["status"] == "completed"
     assert payload["student_id"] == 123
-    assert payload["assessment_name"] == "Lovelace Everyday Life Profiling"
-    assert payload["model_name"] == "Kolb Cycle"
-    assert payload["style"] == "Converging"
-    assert payload["confidence"] == 0.89
-    assert payload["ae_score"] == 0.42
-    assert payload["ro_score"] == 0.31
-    assert payload["ac_score"] == 0.72
-    assert payload["ce_score"] == 0.55
     assert payload["source"] == "generated_via_guided_interview"
     assert payload["summary"] == "..."
-    # Campos de assessment_answers
-    assert payload["answers"] == [{"scenario_id": 1, "dimension": "AC", "answer_text": "..."}]
-    # Campos de profile_scenarios_completed
-    assert payload["answered_scenarios"] == [1, 2, 3, 4, 5, 6, 7, 8, 9]
-    # Sin sobre anidado
-    assert "kolb_profile" not in payload
+
+    kolb_profile = payload["kolb_profile"]
+    assert kolb_profile["student_id"] == 123
+    assert kolb_profile["assessment_name"] == "Lovelace Everyday Life Profiling"
+    assert kolb_profile["model_name"] == "Kolb Cycle"
+    assert kolb_profile["current_vector"] == {"AE": 0.42, "RO": 0.31, "AC": 0.72, "CE": 0.55}
+    assert kolb_profile["style"] == "Converging"
+    assert kolb_profile["confidence"] == 0.89
+    assert kolb_profile["assessment_answers"] == [{"scenario_id": 1, "dimension": "AC", "answer_text": "..."}]
+    assert kolb_profile["scenarios_completed"] == [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 
 def test_to_local_profile_supports_new_envelope_format() -> None:
@@ -51,11 +46,11 @@ def test_to_local_profile_supports_new_envelope_format() -> None:
             "current_vector": {"AE": 0.42, "RO": 0.31, "AC": 0.72, "CE": 0.55},
             "style": "Converging",
             "confidence": 0.89,
-            "answered_scenarios": [1, 2, 3, 4, 5, 6, 7, 8, 9],
-            "answers": [{"scenario_id": 1, "dimension": "AC", "answer": "..."}],
-            "source": "generated_via_guided_interview",
-            "summary": "...",
+            "assessment_answers": [{"scenario_id": 1, "dimension": "AC", "answer_text": "..."}],
+            "scenarios_completed": [1, 2, 3, 4, 5, 6, 7, 8, 9],
         },
+        "source": "generated_via_guided_interview",
+        "summary": "...",
     }
 
     profile = client._to_local_profile(student_id=123, data=remote_data)
@@ -134,7 +129,26 @@ def test_to_legacy_remote_payload_maps_scores() -> None:
     payload = client._to_remote_payload(profile)
 
     assert payload["student_id"] == 35
-    assert payload["ae_score"] == 0.42
-    assert payload["ro_score"] == 0.31
-    assert payload["ac_score"] == 0.72
-    assert payload["ce_score"] == 0.55
+    assert payload["kolb_profile"]["current_vector"] == {"AE": 0.42, "RO": 0.31, "AC": 0.72, "CE": 0.55}
+
+
+def test_sql_payload_roundtrip_is_exact() -> None:
+    client = KolbMCPClient(settings=Settings())
+    original = KolbProfile(
+        student_id=35,
+        assessment_name="Lovelace Everyday Life Profiling",
+        model_name="Kolb Cycle",
+        current_vector=KolbVector(AE=0.42, RO=0.31, AC=0.72, CE=0.55),
+        style="Converging",
+        confidence=0.89,
+        answered_scenarios=[1, 2, 3, 4, 5, 6, 7, 8, 9],
+        answers=[{"scenario_id": 1, "dimension": "AC", "answer": "..."}],
+        source="generated_via_guided_interview",
+        summary="...",
+    )
+
+    persisted_payload = client._to_remote_payload(original)
+    recovered_profile = client._to_local_profile(student_id=35, data=persisted_payload)
+    recovered_payload = client._to_remote_payload(recovered_profile)
+
+    assert recovered_payload == persisted_payload

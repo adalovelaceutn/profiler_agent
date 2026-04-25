@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, AsyncIterator
@@ -11,6 +12,9 @@ from mcp.client.streamable_http import streamablehttp_client
 
 from profiler_agent.config import Settings
 from profiler_agent.models import KolbProfile, KolbVector
+
+
+logger = logging.getLogger(__name__)
 
 
 class KolbProfileNotFoundError(Exception):
@@ -84,14 +88,33 @@ class KolbMCPClient:
         return self._to_local_profile(student_id, data)
 
     async def save_profile(self, profile: KolbProfile) -> dict[str, Any]:
+        payload = self._to_remote_payload(profile)
+        logger.info("Persistiendo perfil MCP para student_id=%s payload=%s", profile.student_id, json.dumps(payload, ensure_ascii=False))
         async with self.session() as session:
             result = await session.call_tool(
                 self.settings.mcp_save_profile_tool,
-                arguments=self._to_remote_payload(profile),
+                arguments=payload,
             )
+            if result.isError:
+                error_message = self._extract_error(result.content)
+                if self._looks_like_legacy_save_schema_error(error_message):
+                    legacy_payload = self._to_legacy_remote_payload(profile)
+                    logger.info(
+                        "Reintentando persistencia MCP con esquema legacy para student_id=%s payload=%s",
+                        profile.student_id,
+                        json.dumps(legacy_payload, ensure_ascii=False),
+                    )
+                    result = await session.call_tool(
+                        self.settings.mcp_save_profile_tool,
+                        arguments=legacy_payload,
+                    )
         if result.isError:
-            raise RuntimeError(self._extract_error(result.content))
-        return result.structuredContent or self._extract_json(result.content) or {"ok": True}
+            error_message = self._extract_error(result.content)
+            logger.error("Error persistiendo perfil MCP para student_id=%s: %s", profile.student_id, error_message)
+            raise RuntimeError(error_message)
+        response_payload = result.structuredContent or self._extract_json(result.content) or {"ok": True}
+        logger.info("Respuesta MCP persistencia student_id=%s: %s", profile.student_id, json.dumps(response_payload, ensure_ascii=False))
+        return response_payload
 
     def _to_local_profile(self, student_id: int, data: dict[str, Any]) -> KolbProfile:
         raw_profile = data.get("kolb_profile")
@@ -99,7 +122,22 @@ class KolbMCPClient:
         # Soporta payload nuevo: sobre + kolb_profile completo serializado.
         if isinstance(raw_profile, dict) and isinstance(raw_profile.get("current_vector"), dict):
             profile_data = dict(raw_profile)
+            if "assessment_answers" in profile_data and "answers" not in profile_data:
+                raw_answers = profile_data.get("assessment_answers") or []
+                profile_data["answers"] = [
+                    {
+                        "scenario_id": a.get("scenario_id"),
+                        "dimension": a.get("dimension"),
+                        "answer": a.get("answer_text", a.get("answer", "")),
+                    }
+                    for a in raw_answers
+                    if isinstance(a, dict)
+                ]
+            if "scenarios_completed" in profile_data and "answered_scenarios" not in profile_data:
+                profile_data["answered_scenarios"] = profile_data.get("scenarios_completed") or []
             profile_data.setdefault("student_id", student_id)
+            profile_data.setdefault("source", str(data.get("source") or "mcp_remote_profile"))
+            profile_data.setdefault("summary", str(data.get("summary") or ""))
             return KolbProfile.model_validate(profile_data)
 
         # Soporta formato plano alineado con el esquema SQL (student_profile).
@@ -164,7 +202,39 @@ class KolbMCPClient:
     def _to_remote_payload(self, profile: KolbProfile) -> dict[str, Any]:
         vector = profile.current_vector.as_dict()
         return {
+            "status": "completed",
             "student_id": profile.student_id,
+            "source": profile.source,
+            "summary": profile.summary,
+            "kolb_profile": {
+                "student_id": profile.student_id,
+                "assessment_name": profile.assessment_name,
+                "model_name": profile.model_name,
+                "current_vector": {
+                    "AE": round(vector["AE"], 4),
+                    "RO": round(vector["RO"], 4),
+                    "AC": round(vector["AC"], 4),
+                    "CE": round(vector["CE"], 4),
+                },
+                "style": profile.style,
+                "confidence": profile.confidence,
+                "assessment_answers": [
+                    {
+                        "scenario_id": a.get("scenario_id"),
+                        "dimension": a.get("dimension"),
+                        "answer_text": a.get("answer", ""),
+                    }
+                    for a in profile.answers
+                ],
+                "scenarios_completed": profile.answered_scenarios,
+            },
+        }
+
+    def _to_legacy_remote_payload(self, profile: KolbProfile) -> dict[str, Any]:
+        vector = profile.current_vector.as_dict()
+        return {
+            "student_id": profile.student_id,
+            "alumno_id": str(profile.student_id),
             "assessment_name": profile.assessment_name,
             "model_name": profile.model_name,
             "status": "completed",
@@ -183,7 +253,6 @@ class KolbMCPClient:
                     "answer_text": a.get("answer", ""),
                 }
                 for a in profile.answers
-                if isinstance(a, dict)
             ],
             "answered_scenarios": profile.answered_scenarios,
         }
@@ -223,6 +292,11 @@ class KolbMCPClient:
     def _is_legacy_get_profile_error(self, error_message: str) -> bool:
         lowered = error_message.lower()
         return "alumno_id" in lowered and "field required" in lowered
+
+    def _looks_like_legacy_save_schema_error(self, error_message: str) -> bool:
+        lowered = error_message.lower()
+        required_legacy_fields = ["alumno_id", "ae_score", "ro_score", "ac_score", "ce_score"]
+        return "field required" in lowered and any(field in lowered for field in required_legacy_fields)
 
     def _to_float(self, value: Any) -> float:
         try:

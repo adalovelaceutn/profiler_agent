@@ -68,16 +68,85 @@ async def test_save_and_get_profile_roundtrip(client: KolbMCPClient) -> None:
 async def test_save_mock_kolb_profile_for_student_35(client: KolbMCPClient) -> None:
     student_id = 35
     expected_summary = "Mock Kolb profile guardado para id_alumno 35"
+    expected_answer = {
+        "scenario_id": 1,
+        "dimension": "AC",
+        "answer": "Mock answer para validacion en Neon",
+    }
+    expected_scenarios = [1, 2, 3, 4, 5, 6, 7, 8, 9]
     profile = KolbProfile(
         student_id=student_id,
         current_vector=KolbVector(AE=0.42, RO=0.31, AC=0.72, CE=0.55),
         style="Converging",
         confidence=0.89,
-        answered_scenarios=[1, 2, 3, 4, 5, 6, 7, 8, 9],
-        answers=[{"scenario_id": 1, "dimension": "AC", "answer": "Mock answer para validacion en Neon"}],
+        answered_scenarios=expected_scenarios,
+        answers=[expected_answer],
         source="integration_test_mock",
         summary=expected_summary,
     )
+
+    persisted_payload = client._to_remote_payload(profile)
+    assert persisted_payload["student_id"] == student_id
+    assert persisted_payload["kolb_profile"]["assessment_answers"] == [
+        {
+            "scenario_id": 1,
+            "dimension": "AC",
+            "answer_text": "Mock answer para validacion en Neon",
+        }
+    ]
+    assert persisted_payload["kolb_profile"]["scenarios_completed"] == expected_scenarios
+
+    save_result = await client.save_profile(profile)
+    if save_result.get("error"):
+        pytest.skip(f"MCP backend no disponible para guardar perfil: {save_result['error']}")
+
+    assert isinstance(save_result, dict)
+    assert "error" not in save_result
+
+
+@pytest.mark.asyncio
+async def test_save_mock_kolb_profile_for_student_15(client: KolbMCPClient) -> None:
+    student_id = 15
+    expected_summary = "Mock Kolb profile guardado para id_alumno 15"
+    expected_answers = [
+        {
+            "scenario_id": 2,
+            "dimension": "RO",
+            "answer": "Primero observo y comparo alternativas antes de decidir.",
+        },
+        {
+            "scenario_id": 6,
+            "dimension": "AE",
+            "answer": "Prefiero probar una version rapida para aprender haciendo.",
+        },
+    ]
+    expected_scenarios = [2, 6, 8, 9]
+    profile = KolbProfile(
+        student_id=student_id,
+        current_vector=KolbVector(AE=0.51, RO=0.44, AC=0.39, CE=0.28),
+        style="Assimilating",
+        confidence=0.87,
+        answered_scenarios=expected_scenarios,
+        answers=expected_answers,
+        source="integration_test_mock",
+        summary=expected_summary,
+    )
+
+    persisted_payload = client._to_remote_payload(profile)
+    assert persisted_payload["student_id"] == student_id
+    assert persisted_payload["kolb_profile"]["assessment_answers"] == [
+        {
+            "scenario_id": 2,
+            "dimension": "RO",
+            "answer_text": "Primero observo y comparo alternativas antes de decidir.",
+        },
+        {
+            "scenario_id": 6,
+            "dimension": "AE",
+            "answer_text": "Prefiero probar una version rapida para aprender haciendo.",
+        },
+    ]
+    assert persisted_payload["kolb_profile"]["scenarios_completed"] == expected_scenarios
 
     save_result = await client.save_profile(profile)
     if save_result.get("error"):
